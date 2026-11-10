@@ -43,7 +43,7 @@ architecture rtl of pong_game is
     constant PAD_RX    : natural := 90;
     constant PAD_SPEED : natural := 3;
     constant BALL      : natural := 3;
-    constant VX_START  : natural := 2;
+    constant VX_START  : natural := 1;
     constant VX_MAX    : natural := 4;
     constant WIN_SCORE : natural := 9;
     constant SERVE_FRAMES : natural := 45;
