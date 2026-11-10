@@ -3,18 +3,27 @@
 -- Beschreibung : Pong 1 gegen 1 auf 96x64 Pixeln. Spielzustand wird einmal pro
 --                Bild (frame_tick) fortgeschrieben; pix_on liefert nach 2 Takten
 --                das Pixel (weiss/schwarz) zu (x, y).
---                active = '0' haelt das Spiel im Anfangszustand.
+--                remote = '0' (Server): das Spiel wird hier gerechnet, st_out
+--                         liefert den Zustand zum Senden ueber das LAN.
+--                remote = '1' (Client): es wird nur gezeichnet, was der Server
+--                         schickt (st_in). Fehlt der Server (remote_ok = '0'),
+--                         steht alles in der Grundstellung und der Ball blinkt.
 ----------------------------------------------------------------------------------
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
+use work.pong_pkg.all;
+
 entity pong_game is
     port (
         clk        : in  std_logic;
         rst        : in  std_logic;
-        active     : in  std_logic;
+        remote     : in  std_logic;
+        remote_ok  : in  std_logic;
+        st_in      : in  pong_state_t;
+        st_out     : out pong_state_t;
         frame_tick : in  std_logic;
         l_up       : in  std_logic;
         l_dn       : in  std_logic;
@@ -50,6 +59,9 @@ architecture rtl of pong_game is
     signal serve_cnt      : natural range 0 to OVER_FRAMES := SERVE_FRAMES;
     signal over_cnt       : natural range 0 to OVER_FRAMES := 0;
     signal lfsr           : std_logic_vector(7 downto 0) := x"A5";
+    signal remote_q       : std_logic := '0';
+    signal ball_on        : std_logic := '1';
+    signal blink          : natural range 0 to 15 := 0;
 
     -- Pixel-Pipeline
     signal s1_l, s1_r, s1_ball, s1_net : std_logic := '0';
@@ -114,6 +126,9 @@ begin
         end if;
     end process;
 
+    st_out <= (pl_y => pl_y, pr_y => pr_y, bx => bx, by => by,
+               score_l => score_l, score_r => score_r);
+
     ------------------------------------------------------------------
     -- Spiellogik, einmal pro Bild
     ------------------------------------------------------------------
@@ -122,19 +137,49 @@ begin
         variable left_out : boolean;
     begin
         if rising_edge(clk) then
-            if rst = '1' or active = '0' then
-                pl_y      <= 25;
-                pr_y      <= 25;
-                bx        <= 46;
-                by        <= 30;
+            remote_q <= remote;
+            if rst = '1' or remote /= remote_q then
+                pl_y      <= PONG_INIT.pl_y;
+                pr_y      <= PONG_INIT.pr_y;
+                bx        <= PONG_INIT.bx;
+                by        <= PONG_INIT.by;
                 vx        <= VX_START;
                 vy        <= 1;
-                score_l   <= 0;
-                score_r   <= 0;
+                score_l   <= PONG_INIT.score_l;
+                score_r   <= PONG_INIT.score_r;
                 serve_cnt <= SERVE_FRAMES;
                 over_cnt  <= 0;
+                ball_on   <= '1';
+                blink     <= 0;
+            elsif frame_tick = '1' and remote = '1' then
+
+                -- Client: Zustand vom Server uebernehmen (nur am Bildende -> kein Tearing)
+                blink <= (blink + 1) mod 16;
+                if remote_ok = '1' then
+                    pl_y    <= st_in.pl_y;
+                    pr_y    <= st_in.pr_y;
+                    bx      <= st_in.bx;
+                    by      <= st_in.by;
+                    score_l <= st_in.score_l;
+                    score_r <= st_in.score_r;
+                    ball_on <= '1';
+                else
+                    pl_y    <= PONG_INIT.pl_y;
+                    pr_y    <= PONG_INIT.pr_y;
+                    bx      <= PONG_INIT.bx;
+                    by      <= PONG_INIT.by;
+                    score_l <= PONG_INIT.score_l;
+                    score_r <= PONG_INIT.score_r;
+                    if blink < 8 then
+                        ball_on <= '1';
+                    else
+                        ball_on <= '0';
+                    end if;
+                end if;
+
             elsif frame_tick = '1' then
 
+                -- Server bzw. lokal: Spiel rechnen
                 -- Schlaeger
                 if l_up = '1' and l_dn = '0' then
                     pl_y <= clamp_pad(pl_y - PAD_SPEED);
@@ -193,8 +238,8 @@ begin
                     if nx <= 0 or nx + BALL >= 96 then
                         -- Punkt: Ball zurueck in die Mitte, Aufschlag zum Verlierer
                         left_out := nx <= 0;
-                        nx := 46;
-                        ny := 30;
+                        nx := PONG_INIT.bx;
+                        ny := PONG_INIT.by;
                         vy <= serve_vy(lfsr(1 downto 0));
                         serve_cnt <= SERVE_FRAMES;
                         if left_out then
@@ -242,7 +287,7 @@ begin
                 s1_r <= '0';
             end if;
 
-            if xi >= bx and xi < bx + BALL and yi >= by and yi < by + BALL then
+            if ball_on = '1' and xi >= bx and xi < bx + BALL and yi >= by and yi < by + BALL then
                 s1_ball <= '1';
             else
                 s1_ball <= '0';

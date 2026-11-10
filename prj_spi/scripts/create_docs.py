@@ -37,7 +37,7 @@ def slug(t):
 
 def make_md(path):
     out = [f"# {C.TITLE}", "", f"*{C.SUBTITLE}*", "",
-           "Stand: 23.10.2026 | Bilder: `doc/img/` | PDF: `dokumentation.pdf` | Folien: `praesentation.pptx`", "",
+           "Stand: 10.11.2026 | Bilder: `doc/img/` | PDF: `dokumentation.pdf` | Folien: `praesentation.pptx`", "",
            "## Inhalt", ""]
     for b in C.CONTENT:
         if b[0] == "h1":
@@ -191,9 +191,9 @@ def make_docx(path):
         bt.set(qn(f"w:{k}"), v)
     pb.append(bt)
     pPr.append(pb)
-    doc.add_picture(str(IMG / "14_bildschirme.png"), width=Cm(16.5))
-    for line in ("Projekt: prj_spi (FPGA-Praktikum, Arty A7-35T)", "Stand: 23.10.2026",
-                 "Verifikation: GHDL-Simulation bestanden; Betrieb auf dem Board vom Projektteam bestätigt",
+    doc.add_picture(str(IMG / "22_lan_pong.png"), width=Cm(16.5))
+    for line in ("Projekt: prj_spi (FPGA-Praktikum, Arty A7-35T)", "Stand: 10.11.2026",
+                 "Verifikation: GHDL-Simulation bestanden; LAN-Betrieb auf echten Boards noch nicht erprobt",
                  "Autor / Gruppe: noch zu ergänzen"):
         p = doc.add_paragraph(line)
         p.runs[0].font.size = Pt(10.5)
@@ -295,12 +295,13 @@ def make_docx(path):
 # ------------------------------------------------------------------ PowerPoint
 
 SLIDES = [
-    ("Wähle einen Schalter", None, [], "", "title"),
+    ("Pong am Arty A7", None, [], "", "title"),
     ("Aufgabe und Ergebnis", "15_moduswahl.png",
-     ["Pmod OLEDrgb (96 x 64, SPI) an Pmod JD des Arty A7-35T",
-      "Vier Schalter wählen das Bild: Bosch, Bosch drehend, HHN, Pong - sonst Hinweis",
-      "Alles als Schaltung in VHDL - kein Prozessor; Simulation bestanden, Betrieb auf dem Board bestätigt"],
-     "Ziel der Arbeit: Ein Farbdisplay über SPI ansteuern und darauf Logos und ein Spiel anzeigen. Betonen: Es gibt keinen Prozessor, jede Funktion ist eine Schaltung, die parallel zu den anderen läuft."),
+     ["Pong auf dem Pmod OLEDrgb (96 x 64, SPI) an Pmod JD des Arty A7-35T",
+      "Ein Board oder zwei Boards über LAN; ein Bitstream, sw0 = Server/Client",
+      "Nur ein Display? Am Client sw1 oben: LEDs zeigen die Punkte",
+      "Alles als Schaltung in VHDL - kein Prozessor; Simulation bestanden"],
+     "Ziel der Arbeit: Ein Farbdisplay über SPI ansteuern und darauf ein Spiel zeigen, das zwei Boards über Ethernet gemeinsam spielen. Betonen: Es gibt keinen Prozessor, jede Funktion ist eine Schaltung, die parallel zu den anderen läuft."),
     ("Hardware: Anschluss an JD", "03_hardware_anschluss.png",
      ["Pmod-Stecker passt 1:1: GND auf Pin 5/11, VCC (3,3 V) auf Pin 6/12",
       "JD ist ein Standard-Pmod mit 200-Ohm-Schutzwiderständen [1]",
@@ -315,11 +316,12 @@ SLIDES = [
      ["Simulation (GHDL) prüft das Design am PC",
       "Vivado: Synthese, Implementierung (Pins aus der XDC), Bitstream",
       "Das Laden über USB-JTAG dauert ca. 6 s; die Konfiguration ist flüchtig [1]"],
-     "Werkzeugkette erklären. Das Skript gen_rom.py erzeugt vorab die Bild-ROMs als VHDL-Paket."),
+     "Werkzeugkette erklären. Alle Quellen liegen in src/, die Pin-Zuordnung in constraints/."),
     ("Gesamtaufbau", "04_blockschaltbild_gesamt.png",
      ["input_filter: Sync + Entprellung für Schalter und Taster",
       "oled_render: Welche Farbe hat Pixel (x, y)?  oled_ctrl: Ablauf und Pixelzähler",
-      "spi_tx: sendet jedes Byte seriell an das Display"],
+      "spi_tx: sendet jedes Byte seriell an das Display",
+      "lan_link + eth_tx/eth_rx: Pong-Daten über den Ethernet-PHY"],
      "Datenfluss: Schalter, Render, Controller, SPI, Display. Der Controller fragt Pixel für Pixel nach der Farbe; es gibt keinen Bildspeicher im FPGA."),
     ("SPI Mode 3 - ein Byte", "05_spi_timing.png",
      ["SCK ruht auf 1; Bit wechselt bei fallender, wird bei steigender Flanke gelesen",
@@ -348,37 +350,17 @@ SLIDES = [
      "Wichtig: Der FPGA sendet nur die Pixel in der richtigen Reihenfolge, keine Adressen."),
     ("Farbe: RGB565", "10_rgb565.png",
      ["5 Bit Rot, 6 Bit Grün, 5 Bit Blau = 16 Bit pro Pixel",
-      "Bosch-Rot (227, 0, 21) = 0xE002; Weiß 0xFFFF; Schwarz 0x0000",
+      "Rot (227, 0, 21) = 0xE002; Pong nutzt nur Weiß 0xFFFF und Schwarz 0x0000",
       "Erst das obere, dann das untere Byte"],
      "Rechenbeispiel durchgehen: 227 geteilt durch 8 ist 28, das sind fünf Bit."),
     ("Zeitbedarf eines Bildes", "16_bildzeit.png",
      ["Pixel: 12 + 140 + 140 Takte = ca. 294 Takte = 2,94 µs",
       "6144 Pixel ca. 18 ms, rechnerisch ca. 55 Bilder pro Sekunde",
-      "Modus, Winkel und Spiel ändern sich nur bei frame_tick"],
+      "Rolle und Spiel ändern sich nur bei frame_tick"],
      "Die Bildrate ist berechnet, nicht gemessen. Weil sich nur am Bildende etwas ändert, zerreißt das Bild nicht."),
-    ("Die fünf Bildschirme", "14_bildschirme.png",
-     ["Bosch: Symbol links (Sprite), Schriftzug rechts (Bitmap)",
-      "HHN-Logo nach Vorlage nachgezeichnet (oder eigenes PNG einsetzen)",
-      "Hinweis und Pong in Weiß auf Schwarz"],
-     "Alle Vorschauen sind aus den echten ROM-Daten des Projekts gerendert, nicht nachgebaut."),
-    ("Pixel-Pipeline", "11_pixel_pipeline.png",
-     ["Fünf Registerstufen: Zeile, Pixel, Palette, Sprite, Auswahl",
-      "Kurze Wege zwischen den Registern: hoher Takt ohne Probleme",
-      "Latenz 5 Takte, Wartezeit 12 Takte: keine Handshake-Logik nötig"],
-     "Warum Pipeline: Ein langer Rechenweg müsste in 10 ns fertig sein. Mit Registern dazwischen ist jede Stufe kurz."),
-    ("Bilder im ROM", "12_rom_format.png",
-     ["Pixel = 4-Bit-Index in eine 16-Farben-Palette (RGB565)",
-      "Eine Zeile = 384 Bit; 3 Bilder = 73 728 Bit",
-      "gen_rom.py zeichnet, verkleinert, reduziert auf 16 Farben und schreibt VHDL"],
-     "Die for-Schleife in get_px ist kein Zeitablauf, sondern beschreibt einen Multiplexer."),
-    ("Drehender Anker: 32 Sprites", "13_sprites.png",
-     ["Ring + Anker 32 mal in 5,625 Grad Schritten vorgerendert (20 x 20 Pixel)",
-      "Sprite-Fenster ersetzt im Bosch-Bild die Bitmap-Farbe",
-      "Keine Multiplikation im FPGA, saubere Kanten"],
-     "Eine Drehung zu rechnen wäre aufwendiger und würde treppige Kanten liefern. Das H ist nach 180 Grad wieder gleich, daher genügen 32 Winkel."),
     ("Pong: Spielfeld", "17_pong_spielfeld.png",
      ["Feld = Display: 96 x 64; Schläger 2 x 14, Ball 3 x 3",
-      "btn0/btn1 linker, btn2/btn3 rechter Schläger",
+      "btn0/btn1 linker, btn2/btn3 rechter Schläger (über LAN: Tasten des Clients)",
       "Ball wird mit jedem Treffer schneller (max. 4 Pixel pro Bild)"],
      "Neun Punkte zum Sieg, danach Neustart. Der Verlierer des Punktes bekommt den Aufschlag."),
     ("Pong: Ablauf pro Bild", "18_pong_ablauf.png",
@@ -391,6 +373,18 @@ SLIDES = [
       "Außen steiler, innen flacher; nie waagerecht",
       "So lässt sich der Ball gezielt lenken"],
      "offset = Ballmitte relativ zur Schlägeroberkante."),
+    ("Pong über LAN: Server und Client", "22_lan_pong.png",
+     ["Server (sw0 unten) rechnet das Spiel, Client (sw0 oben) zeigt es und schickt seine Tasten",
+      "Nur ein OLED: am Server; Client mit sw1 oben - Display aus, LEDs = eigene Punkte",
+      "Ethernet-Rahmen an alle (Broadcast), EtherType 88B5, 64 Byte, ca. 55 pro Sekunde",
+      "LD0 grün = Partner da; ohne Partner spielt der Server lokal, der Client wartet"],
+     "Warum nur ein Spielstand: Zwei unabhängig rechnende Boards würden auseinanderlaufen. Der Client ist ein Fernseher mit Fernbedienung. Kein IP nötig - Direktkabel oder Switch genügen."),
+    ("Pong über LAN: Technik", None,
+     ["PHY TI DP83848J über MII: 4 Bit pro Takt, TX_CLK/RX_CLK 25 MHz vom PHY, 25-MHz-Grundtakt vom FPGA",
+      "eth_tx/eth_rx: Präambel + SFD, Nibble für Nibble, CRC-32 (Rest DEBB20E3 = fehlerfrei)",
+      "Drei Taktdomänen: Übergabe per Toggle-Handshake mit 2-FF-Synchronisierern",
+      "Zeitüberwachung: 15 Bilder ohne gültigen Rahmen = getrennt"],
+     "Toggle statt Puls: Eine Pegeländerung kann der andere Takt nicht verpassen. Die Sendedaten bleiben stabil, bis die Quittung zurück ist. Getestet mit zwei kompletten Designs in der Simulation; auf Hardware noch nicht erprobt."),
     ("Eingänge entprellen", "20_entprellung.png",
      ["2 Flip-Flops gegen Metastabilität, Zähler für 10 ms",
       "Taster: Ruhe 0, gedrückt 1; RESET: aktiv low [1]",
@@ -398,19 +392,22 @@ SLIDES = [
      "Bedienlatenz: höchstens ca. 30 ms (10 ms Filter + bis zu einem Bild)."),
     ("Simulation und Tests", "21_testbench.png",
      ["SSD1331-Modell in der Testbench liest SPI mit und baut das Bild nach",
-      "Geprüft: Init-Bytes, alle Pixel der Bilder, Drehwinkel, Pong-Schläger",
+      "Geprüft: Init-Bytes, Pong-Bild, Server und Client mit/ohne OLED (Test-Server speist Rahmen ein)",
+      "LAN: tb_eth (CRC, Bitfehler, 10 Mbit/s) und tb_lan_pong (zwei Boards, Kabel gestört/getrennt)",
       "Nicht geprüft: Timing auf dem Chip, Pins, Display-Orientierung"],
      "Die Simulation läuft mit schnellerem SPI-Takt und kürzeren Wartezeiten; die Logik ist dieselbe."),
     ("Fazit und Ausblick", None,
-     ["Ergebnis: vier Anwendungen plus Hinweisbild auf einem 96 x 64 Pixel Display, komplett in VHDL",
+     ["Ergebnis: Pong für ein oder zwei Boards auf einem 96 x 64 Pixel Display, komplett in VHDL",
       "Gelernt: SPI, Display-Initialisierung, Pipeline, Zustandsautomaten, Testbench mit Gerätemodell",
-      "Ideen: eigene Bilder (assets/), Siegertext in Pong, höherer SPI-Takt, Text-Zeichensatz"],
+      "Erweitert: Pong über LAN mit zwei Arty - Ethernet ohne Prozessor, direkt in VHDL",
+      "Ideen: Siegertext in Pong, Pause-Schalter, höherer SPI-Takt, mehrere Pong-Paare im Netz"],
      "Zum Abschluss: Orientierung des Displays und Farbreihenfolge lassen sich über den Remap-Wert anpassen."),
     ("Quellen", None,
      ["[1] Digilent: Arty A7 Reference Manual - digilent.com/reference/programmable-logic/arty-a7/reference-manual",
       "[2] Digilent: Pmod OLEDrgb Reference Manual - digilent.com/reference/pmod/pmodoledrgb/reference-manual",
       "[3] Solomon Systech: SSD1331 Datasheet (in [2] verlinkt)",
-      "[4] Digilent: Arty-A7-35-Master.xdc (Pin-Namen)",
+      "[4] Digilent: Arty-A7-35-Master.xdc (Pin-Namen) - github.com/Digilent/digilent-xdc",
+      "[6] TI: DP83848x Datenblatt SNLS250E;  [8] IEEE 802.3 (Rahmen, MII);  [9] IEEE: EtherType 88B5",
       "Zugriff: Seiten über Internet-Archive-Abbild (07.11.2024), direkter Abruf lieferte HTTP 403"],
      ""),
 ]
@@ -452,11 +449,11 @@ def make_pptx(path):
             bg.fill.fore_color.rgb = PRGB.from_string(BLUE)
             bg.line.fill.background()
             pt_text(s, 0.8, 1.0, 11.7, 1.6, [C.TITLE], 40, "FFFFFF", True)
-            pt_text(s, 0.8, 2.6, 11.7, 1.0, ["Bosch-Logo  |  HHN-Logo  |  rotierender Anker  |  Pong"], 22, "DDEBFA")
+            pt_text(s, 0.8, 2.6, 11.7, 1.0, ["Pong 1 gegen 1  |  ein Board oder zwei Boards per LAN  |  Pmod OLEDrgb"], 22, "DDEBFA")
             pt_text(s, 0.8, 3.3, 11.7, 0.6, ["Projekt prj_spi  |  Digitale Schaltungstechnik  |  Autor / Gruppe: noch zu ergänzen"], 14, "DDEBFA")
-            x, y, w, h = fit(IMG / "14_bildschirme.png", 0.8, 4.2, 11.7, 3.0)
-            s.shapes.add_picture(str(IMG / "14_bildschirme.png"), Inches(x), Inches(y), Inches(w), Inches(h))
-            s.notes_slide.notes_text_frame.text = "Titelfolie. Die Vorschaubilder zeigen die fünf Anzeigen des Projekts."
+            x, y, w, h = fit(IMG / "22_lan_pong.png", 0.8, 4.2, 11.7, 3.0)
+            s.shapes.add_picture(str(IMG / "22_lan_pong.png"), Inches(x), Inches(y), Inches(w), Inches(h))
+            s.notes_slide.notes_text_frame.text = "Titelfolie. Das Bild zeigt, was Server und Client austauschen."
             continue
         pt_text(s, 0.5, 0.3, 12.3, 0.8, [title], 30, BLUE, True)
         line = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(1.08), Inches(12.33), Inches(0.05))

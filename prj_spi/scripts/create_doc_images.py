@@ -1,7 +1,7 @@
 """Erzeugt alle Bilder fuer die Dokumentation von prj_spi nach doc/img/*.png.
 
 Aufruf:  python scripts/create_doc_images.py
-Die Bilder fuer Bitmaps/Sprites stammen direkt aus scripts/gen_rom.py, Zahlen aus dem VHDL-Code.
+Zahlen und Abmessungen stammen aus dem VHDL-Code. Einzelne Bilder: python scripts/create_doc_images.py fig_lan fig_modus
 """
 import math
 import sys
@@ -11,8 +11,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "doc" / "img"
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import gen_rom  # noqa: E402
 
 S = 2                                       # Zeichnen mit 2x, Ausgabe heruntergerechnet
 
@@ -40,6 +38,13 @@ FONTS = {
     (False, True): "C:/Windows/Fonts/consola.ttf",
     (True, True): "C:/Windows/Fonts/consolab.ttf",
 }
+# Ersatz ausserhalb von Windows (Linux): Carlito / DejaVu Sans Mono
+FONTS_ALT = {
+    (False, False): "/usr/share/fonts/truetype/crosextra/Carlito-Regular.ttf",
+    (True, False): "/usr/share/fonts/truetype/crosextra/Carlito-Bold.ttf",
+    (False, True): "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    (True, True): "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+}
 _font_cache = {}
 
 # Bildtexte sind im Quelltext ASCII; hier werden Umlaute eingesetzt.
@@ -51,7 +56,9 @@ UMLAUTS = [("Schlaeger", "Schläger"), ("Eingaenge", "Eingänge"), ("Eintraege",
            ("gedrueckt", "gedrückt"), ("gefuehrt", "geführt"), ("gefuellt", "gefüllt"), ("geglaettet", "geglättet"),
            ("haelt", "hält"), ("haengt", "hängt"), ("kraeftiger", "kräftiger"), ("laeuft", "läuft"), ("naechst", "nächst"),
            ("muesste", "müsste"), ("vergroessert", "vergrößert"), ("waechst", "wächst"), ("zufaellig", "zufällig"),
-           ("zurueck", "zurück"), ("zusaetzlich", "zusätzlich"), ("staeblich", "stäblich"), ("Taktzyklus", "Taktzyklus")]
+           ("zurueck", "zurück"), ("zusaetzlich", "zusätzlich"), ("staeblich", "stäblich"), ("Taktzyklus", "Taktzyklus"),
+           ("Laenge", "Länge"), ("Fuell", "Füll"), ("gueltig", "gültig"), ("Aenderung", "Änderung"), ("Praeambel", "Präambel"),
+           ("waehlt", "wählt"), ("gruen", "grün"), ("frueher", "früher"), ("Waehle", "Wähle"), ("Zeitueberwachung", "Zeitüberwachung"), ("ungueltig", "ungültig")]
 
 
 def um(s):
@@ -63,7 +70,10 @@ def um(s):
 def get_font(size, bold=False, mono=False):
     key = (size, bold, mono)
     if key not in _font_cache:
-        _font_cache[key] = ImageFont.truetype(FONTS[(bold, mono)], round(size * S))
+        path = FONTS[(bold, mono)]
+        if not Path(path).exists():
+            path = FONTS_ALT[(bold, mono)]
+        _font_cache[key] = ImageFont.truetype(path, round(size * S))
     return _font_cache[key]
 
 
@@ -146,22 +156,6 @@ def scaled(img, k):
     return img.resize((img.width * k, img.height * k), Image.NEAREST)
 
 
-def rgb_image(idx, pal):
-    im = Image.new("RGB", (gen_rom.W, gen_rom.H))
-    im.putdata([pal[i] for i in idx])
-    return im
-
-
-def with_sprite(base, sprites, sym_pal, k):
-    im = base.copy()
-    for y in range(gen_rom.SPR):
-        for x in range(gen_rom.SPR):
-            im.putpixel((gen_rom.SPR_X0 + x, gen_rom.SPR_Y0 + y), sym_pal[sprites[k][y * gen_rom.SPR + x]])
-    return im
-
-
-# ---------------------------------------------------------------- Bilder
-
 def fig_grundlagen():
     f = Fig(1600, 640)
     f.title("FPGA-Grundbausteine", "Ein FPGA besteht aus sehr vielen kleinen, frei verschaltbaren Bausteinen - Logik und Speicher.")
@@ -235,8 +229,6 @@ def fig_toolflow():
         f.box(x, 190, 300, 120, t, c, 21, True)
     for a, b in zip(xs, xs[1:]):
         f.arrow([(a + 300, 250), (b, 250)], INK, 3, 14)
-    f.box(30, 90, 300, 60, "gen_rom.py -> oled_rom_pkg.vhd", C_MEM, 16)
-    f.arrow([(180, 150), (180, 190)])
     f.box(650, 90, 300, 60, "XDC: Pin-Zuordnung + Takt", C_WARN, 17)
     f.arrow([(800, 150), (800, 190)])
     f.text(1420, 330, "USB-JTAG,\nca. 6 s (Digilent)", 16, color=GREY, ha="c")
@@ -299,7 +291,7 @@ def fig_anschluss():
 
 
 def fig_gesamt():
-    f = Fig(1700, 820)
+    f = Fig(1700, 1040)
     f.title("Blockschaltbild: spi_top")
     # Eingaenge
     for y, t in [(100, "sw[3:0]\n(Schalter)"), (210, "btn[3:0]\n(Taster)"), (640, "ck_rst\n(RESET-Taster)")]:
@@ -309,27 +301,23 @@ def fig_gesamt():
     f.arrow([(200, 250), (260, 250)])
     f.box(260, 620, 220, 120, "Reset-Synchronisierer\n(2 FF)  ->  rst", C_FILTER, 17, True)
     f.arrow([(200, 680), (260, 680)])
-    f.box(260, 340, 220, 60, "led[3:0] = sw_f", C_HW, 17)
+    f.box(260, 340, 220, 80, "led[3:0] = sw_f\n(Client ohne OLED:\nPunktestand)", C_HW, 15)
     f.arrow([(370, 290), (370, 340)])
     # Render
     f.rect(560, 80, 570, 640, C_REND, GREEN, 3, 14)
-    f.text(845, 92, "oled_render  (welches Bild? welche Farbe?)", 20, True, GREEN, "c")
-    f.box(580, 140, 245, 110, "Modus-Dekoder\nsw -> mode\n(nur bei frame_tick)", WHITE, 17)
-    f.box(865, 140, 245, 110, "Drehwinkel ang\n(0..31, alle 2 Bilder\n+1 im Modus sw1)", WHITE, 17)
-    f.box(580, 290, 245, 110, "Bitmap-ROM\nBOSCH / HHN / Hinweis\n64 Zeilen x 384 Bit", C_MEM, 17)
-    f.box(865, 290, 245, 110, "Sprite-ROM\nBosch-Ring + Anker\n32 Winkel x 20x20", C_MEM, 17)
-    f.box(580, 450, 245, 120, "pong_game\nSpiellogik + Pixel\n(btn -> Schlaeger)", WHITE, 17)
-    f.box(865, 450, 245, 120, "Pixel-Pipeline\n5 Register-Stufen\n(Zeile -> Pixel -> Palette\n-> Sprite -> Mux)", WHITE, 16)
+    f.text(845, 92, "oled_render  (Pong: welche Farbe hat (x, y)?)", 20, True, GREEN, "c")
+    f.box(580, 140, 245, 110, "Rolle\nsw0 -> Server / Client\n(nur bei frame_tick)", WHITE, 17)
+    f.box(865, 140, 245, 110, "rechter Schlaeger\nServer: Client (LAN)\noder btn2/btn3", WHITE, 17)
+    f.box(580, 450, 245, 120, "pong_game\nServer: Spiel rechnen\nClient: Zustand anzeigen", WHITE, 17)
+    f.box(865, 450, 245, 120, "Ausgabe\nweiss / schwarz\n(1 Register)", WHITE, 17)
     f.arrow([(825, 510), (865, 510)])
-    f.arrow([(987, 250), (987, 290)])
-    f.arrow([(702, 250), (702, 290)])
-    f.arrow([(987, 400), (987, 450)])
-    f.arrow([(825, 370), (845, 370), (845, 480), (865, 480)])
-    f.text(845, 610, "Der Modus bestimmt, aus welcher Quelle die Pipeline liest.\nAlles ist rein synchron und kennt kein Warten.", 15, color=GREY, ha="c")
+    f.arrow([(702, 250), (702, 450)])
+    f.arrow([(987, 250), (987, 300), (760, 300), (760, 450)])
+    f.text(987, 330, "Kein Bildspeicher: jedes Pixel wird\nim Moment des Sendens berechnet.", 15, color=GREY, ha="c")
     f.arrow([(480, 150), (580, 150)], BLUE, 2.5)
     f.text(530, 125, "sw_f", 14, color=BLUE, ha="c")
     f.arrow([(480, 250), (520, 250), (520, 510), (580, 510)], BLUE, 2.5)
-    f.text(505, 400, "btn_f", 14, color=BLUE, ha="r")
+    f.text(505, 440, "btn_f", 14, color=BLUE, ha="r")
     # Ctrl
     f.rect(1250, 90, 220, 230, C_CTRL, RED, 3, 14)
     f.text(1360, 100, "oled_ctrl", 20, True, RED, "c")
@@ -350,7 +338,27 @@ def fig_gesamt():
     for p, y in pins:
         f.text(1568, y - 11, p, 15, True)
         f.arrow([(1470, y), (1560, y)], BLUE, 2)
-    f.text(1360, 615, "CS, MOSI, SCK, D/C aus spi_tx;\nRES, VCCEN, PMODEN direkt aus oled_ctrl", 14, color=GREY, ha="c")
+    f.text(1360, 615, "CS, MOSI, SCK, D/C aus spi_tx; RES, VCCEN, PMODEN\naus oled_ctrl. Client ohne OLED (sw0 = sw1 = 1):\noled_ctrl im Reset, alle Pins 0, Bildtakt intern", 14, color=GREY, ha="c")
+    # LAN
+    f.rect(560, 790, 570, 200, C_SPI, PURPLE, 3, 14)
+    f.text(845, 800, "lan_link  (Pong ueber LAN)", 20, True, PURPLE, "c")
+    f.box(580, 845, 170, 125, "Rahmen bauen\nServer: Zustand\nClient: Tasten", WHITE, 15)
+    f.box(765, 845, 165, 125, "eth_tx\nim Takt TX_CLK\n+ CRC-32", WHITE, 15)
+    f.box(945, 845, 165, 125, "eth_rx\nim Takt RX_CLK\nCRC pruefen", WHITE, 15)
+    f.arrow([(650, 570), (650, 790)], PURPLE, 2.5)
+    f.arrow([(760, 790), (760, 570)], PURPLE, 2.5)
+    f.text(640, 680, "Zustand\n(Server)", 14, color=PURPLE, ha="r")
+    f.text(772, 680, "Zustand vom Server /\nTasten vom Client", 14, color=PURPLE)
+    f.box(1250, 800, 300, 180, "Ethernet-PHY\nTI DP83848J\n(MII, 10/100 Mbit/s)\nRJ45-Buchse", C_HW, 17, True)
+    f.arrow([(1130, 860), (1250, 860)], PURPLE, 2.5)
+    f.arrow([(1250, 930), (1130, 930)], PURPLE, 2.5)
+    f.text(1190, 835, "TXD, TX_EN", 13, color=PURPLE, ha="c")
+    f.text(1190, 940, "RXD, RX_DV", 13, color=PURPLE, ha="c")
+    f.text(1400, 990, "FPGA liefert 25 MHz (eth_ref_clk) und Reset", 13, color=GREY, ha="c")
+    f.arrow([(1580, 890), (1680, 890)], INK, 3)
+    f.text(1630, 860, "LAN", 16, True, ha="c")
+    f.box(260, 830, 220, 120, "LD0 (RGB)\ngruen = Partner da\nrot = kein Partner", C_HW, 16)
+    f.arrow([(560, 890), (480, 890)], PURPLE, 2.5)
     f.save("04_blockschaltbild_gesamt.png")
 
 
@@ -571,11 +579,11 @@ def fig_rgb565():
     f.text(x0 + 8 * cw, 195, "G (6 Bit)", 18, True, GREEN, "c")
     f.text(x0 + 13.5 * cw, 195, "B (5 Bit)", 18, True, BLUE, "c")
     f.text(30, 140, "Bit", 18, True)
-    # Beispiel Bosch-Rot
+    # Beispiel Rot
     r, g, b = 227, 0, 21
     v = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
     bits = f"{v:016b}"
-    f.text(30, 250, "Beispiel Bosch-Rot (227, 0, 21):", 19, True)
+    f.text(30, 250, "Beispiel Rot (227, 0, 21):", 19, True)
     f.text(30, 285, "R = 227 / 8 = 28 = 11100     G = 0 / 4 = 0 = 000000     B = 21 / 8 = 2 = 00010", 18, mono=True)
     for i in range(16):
         f.box(x0 + i * cw, 340, cw, 56, bits[i], cols[i], 22, True, r=2)
@@ -584,101 +592,9 @@ def fig_rgb565():
     f.rect(x0 + 8 * cw, 420, 8 * cw, 56, None, INK, 3, 6)
     f.text(x0 + 4 * cw, 448, f"1. Byte: 0x{v >> 8:02X}  (pix[15:8])", 18, True, ha="c", va="m")
     f.text(x0 + 12 * cw, 448, f"2. Byte: 0x{v & 255:02X}  (pix[7:0])", 18, True, ha="c", va="m")
-    f.text(30, 505, "Weiss = 0xFFFF (alle Bits 1)   Schwarz = 0x0000   -   Pong und der Hinweis nutzen nur diese beiden Werte.", 17)
+    f.text(30, 505, "Weiss = 0xFFFF (alle Bits 1)   Schwarz = 0x0000   -   Pong nutzt nur diese beiden Werte.", 17)
     f.text(30, 540, "Der Controller wurde mit Remap 0x72 auf 65k-Farben (RGB-Reihenfolge) eingestellt (siehe Init-Sequenz).", 15, color=GREY)
     f.save("10_rgb565.png")
-
-
-def fig_pipeline():
-    f = Fig(1700, 780)
-    f.title("Pixel-Pipeline in oled_render", "Pro Takt wird jede Stufe weitergeschoben. x/y bleiben ca. 300 Takte stabil - die Pipeline hat nur 5 Stufen und ist lange fertig.")
-    stages = [
-        ("Stufe 1", "Zeile aus Bitmap-ROM\n(Modus waehlt BOSCH,\nHHN oder Hinweis)\nx merken\nSprite-Fenster pruefen\n(in_box, sx, Adresse)", "row1, x1,\nin_box1, sx1, sidx1"),
-        ("Stufe 2", "Pixelindex aus der Zeile\nholen (4 Bit, get_px)\n\nSprite-Zeile aus\nSprite-ROM holen", "idx2, srow2,\nin_box2, sx2"),
-        ("Stufe 3", "Palette: Index ->\nRGB565-Farbe\n\nSprite-Pixel (4 Bit)\nauswaehlen", "col3, sym3,\nin_box3"),
-        ("Stufe 4", "Sprite-Palette:\nGrauwert -> RGB565\n\nBitmap-Farbe\ndurchreichen", "col4, sym4,\nin_box4"),
-        ("Stufe 5", "Auswahl (Multiplexer):\nPong?  -> Weiss/Schwarz\nBosch + im Fenster\n   -> Sprite-Farbe\nsonst -> Bitmap-Farbe", "pix[15:0]"),
-    ]
-    x = 40
-    for i, (t, body, regs) in enumerate(stages):
-        f.rect(x, 150, 290, 330, C_REND if i < 4 else C_MEM, GREEN if i < 4 else ORANGE, 2, 12)
-        f.text(x + 145, 162, t, 21, True, GREEN if i < 4 else ORANGE, "c")
-        f.text(x + 145, 205, body, 17, ha="c")
-        f.rect(x + 20, 400, 250, 62, WHITE, GREY, 1.5, 6)
-        f.text(x + 145, 431, regs, 14, ha="c", va="m", mono=True)
-        if i < 4:
-            f.arrow([(x + 290, 300), (x + 330, 300)], INK, 3, 13)
-        x += 330
-    f.arrow([(0, 300), (40, 300)], INK, 3, 13)
-    f.text(10, 270, "x, y", 17, True)
-    f.box(1060, 560, 540, 110, "pong_game (2 eigene Stufen)\nVergleiche: Schlaeger, Ball, Netz, Ziffern\n-> pix_on (1 Bit)", WHITE, 17)
-    f.arrow([(1500, 560), (1500, 480)], INK, 2.5)
-    f.arrow([(1650, 300), (1692, 300)], INK, 3, 11)
-    f.text(1672, 270, "pix", 17, True, ha="c")
-    f.text(40, 520, "Warum eine Pipeline?", 20, True, BLUE)
-    f.text(40, 555, "Ein einziger langer Rechenweg (ROM-Zeile -> Bit waehlen -> Palette -> Mux)\nmuesste in 10 ns fertig sein. Mit Registern dazwischen schafft jede Stufe\nihren kurzen Weg locker - die Latenz (5 Takte) spielt keine Rolle, weil\noled_ctrl vor dem Abholen 12 Takte wartet (PIPE_WAIT).", 17)
-    f.text(40, 700, "Der Modus (mode), der Winkel (ang) und der Spielzustand aendern sich nur bei frame_tick,\nalso nie mitten im Bild - dadurch gibt es kein Zerreissen.", 17, True)
-    f.save("11_pixel_pipeline.png")
-
-
-def fig_rom():
-    base, pal = gen_rom.bosch_image()
-    y = 32
-    row = base[y * 96:(y + 1) * 96]
-    f = Fig(1600, 700)
-    f.title("Bitmap-ROM: so liegt ein Bild im FPGA", "Jede Zeile ist ein 384-Bit-Wort: 96 Pixel x 4 Bit Palettenindex. Pixel 0 steht ganz links (MSB).")
-    f.text(30, 100, f"Beispiel: Zeile y = {y} des Bosch-Bitmaps", 20, True)
-    x0, cw = 30, 120
-    show = list(range(0, 4)) + [None] + list(range(31, 34)) + [None] + [95]
-    x = x0
-    for sx in show:
-        if sx is None:
-            f.text(x + 20, 160, "...", 22, True, ha="c")
-            x += 40
-            continue
-        idx = row[sx]
-        f.box(x, 130, cw, 70, f"x={sx}\nidx={idx:X}", C_MEM if idx else WHITE, 16, r=4)
-        x += cw + 6
-    hexrow = "".join(f"{i:X}" for i in row)
-    f.text(30, 225, "als Hex-Zeichen im VHDL (je Pixel eine Stelle):", 17, True)
-    f.text(30, 255, hexrow[:48], 15, mono=True)
-    f.text(30, 278, hexrow[48:], 15, mono=True)
-    f.text(30, 325, "Pixel x liegt in den Bits (383 - 4x) bis (380 - 4x)  ->  get_px() prueft fuer x = 0..95, welcher Treffer es ist.", 17)
-    # Palette
-    f.text(30, 380, "Palette (16 Eintraege je Bild, RGB565):", 20, True)
-    for i in range(6):
-        c = pal[i]
-        v = gen_rom.rgb565(c)
-        f.rect(30 + i * 250, 420, 52, 52, c, INK, 2, 6)
-        f.text(95 + i * 250, 424, f"idx {i}\n0x{v:04X}", 16, mono=True)
-    f.rect(30, 510, 1540, 160, C_WARN, ORANGE)
-    f.text(50, 522, "Speicherbedarf (aus gen_rom.py):", 18, True)
-    f.text(50, 552, "3 Bitmaps (Bosch, HHN, Hinweis): 3 x 64 x 384 Bit = 73 728 Bit\nSprite-ROM (32 Winkel x 20 Zeilen x 80 Bit)  = 51 200 Bit\nDas passt bequem in den Artix-7 (225 KB Block-RAM, zusaetzlich LUT-ROM).\nDie Bilder aendert man nie von Hand: python scripts/gen_rom.py erzeugt src/oled_rom_pkg.vhd neu.", 16)
-    f.save("12_rom_format.png")
-
-
-def fig_sprites():
-    base, pal = gen_rom.bosch_image()
-    sprites = [gen_rom.sym_sprite(k) for k in range(gen_rom.SPR_N)]
-    sym_pal = gen_rom.sym_palette()
-    f = Fig(1600, 760)
-    f.title("Bosch-Symbol: 32 vorgerenderte Dreh-Sprites", "Der Anker (H) hat nach 180 Grad wieder dieselbe Form - 32 Schritte x 5,625 Grad reichen fuer die volle Drehung.")
-    ks = [0, 4, 8, 12, 16, 20, 24, 28]
-    for i, k in enumerate(ks):
-        im = Image.new("RGB", (20, 20))
-        im.putdata([sym_pal[v] for v in sprites[k]])
-        f.rect(30 + i * 192, 100, 168, 168, WHITE, GREY, 1, 0)
-        f.paste(scaled(im, 8), 30 + i * 192 + 4, 104)
-        f.text(30 + i * 192 + 84, 276, f"k = {k}  ({k * 180 / 32:.1f} Grad)", 15, ha="c")
-    full = with_sprite(rgb_image(base, pal), sprites, sym_pal, 0)
-    f.paste(scaled(full, 5), 30, 350)
-    kx, ky = 30 + gen_rom.SPR_X0 * 5, 350 + gen_rom.SPR_Y0 * 5
-    f.rect(kx, ky, 100, 100, None, RED, 3, 0)
-    f.text(30, 680, "Bosch-Bild: Schriftzug kommt aus dem Bitmap, das rote\nQuadrat (20 x 20 Pixel, Ecke (1,22)) aus dem Sprite.", 16)
-    f.arrow([(kx + 100, ky + 20), (640, 400)], RED, 2.5)
-    f.text(660, 360, "Sprite-Fenster", 22, True, RED)
-    f.text(660, 400, "Liegt der aktuelle Pixel (x, y) im Fenster, ersetzt die Sprite-Farbe die Bitmap-Farbe:\n\n    sx = x - 1        sy = y - 22        (0..19)\n    Zeile im Sprite-ROM = ang * 20 + sy\n    Pixel = Bits (79 - 4 sx) .. (76 - 4 sx)\n    Farbe = SYM_PAL(Pixel)   (16 Grauwerte von Weiss bis Grau)\n\nsw0: ang = 0 (H steht aufrecht)\nsw1: ang zaehlt alle 2 Bilder hoch (0..31, dann wieder 0)\n\nVorteil: keine Multiplikation / kein Sinus im FPGA, Kanten sind\nsauber geglaettet. Nachteil: nur die 32 festen Winkel.", 17, mono=False)
-    f.save("13_sprites.png")
 
 
 def pong_frame():
@@ -699,54 +615,28 @@ def pong_frame():
     return im
 
 
-def fig_vorschau():
-    base, pal = gen_rom.bosch_image()
-    sprites = [gen_rom.sym_sprite(k) for k in range(gen_rom.SPR_N)]
-    sym_pal = gen_rom.sym_palette()
-    hhn = rgb_image(*gen_rom.hhn_image())
-    msg = rgb_image(*gen_rom.msg_image())
-    screens = [("sw0", "Bosch-Logo", with_sprite(rgb_image(base, pal), sprites, sym_pal, 0)),
-               ("sw1", "Bosch, Anker dreht sich", with_sprite(rgb_image(base, pal), sprites, sym_pal, 9)),
-               ("sw2", "HHN-Logo", hhn),
-               ("sw3", "Pong 1 gegen 1", pong_frame()),
-               ("kein / mehrere", "Waehle einen Schalter", msg)]
-    f = Fig(1700, 440)
-    f.title("Die fuenf Bildschirme (aus den echten ROM-Daten gerendert)")
-    for i, (sw, name, im) in enumerate(screens):
-        x = 30 + i * 330
-        f.rect(x - 6, 96, 96 * 3 + 12, 64 * 3 + 12, (50, 50, 55), INK, 2, 8)
-        f.paste(scaled(im, 3), x, 102)
-        f.text(x + 144, 310, sw, 20, True, BLUE, "c")
-        f.text(x + 144, 340, name, 17, ha="c")
-    f.text(30, 400, "Das echte Display ist 0,8 x 0,5 Zoll gross (Digilent) - Farben wirken dort kraeftiger als am Bildschirm.", 15, color=GREY)
-    f.save("14_bildschirme.png")
-
-
 def fig_modus():
-    f = Fig(1600, 640)
-    f.title("Schalter -> Bild (Moduswahl)", "Es zaehlt nur eine Stellung mit GENAU einem Schalter oben. Alles andere zeigt den Hinweis.")
-    hdr = ["sw3", "sw2", "sw1", "sw0", "Ergebnis"]
-    xs = [60, 170, 280, 390, 520]
+    f = Fig(1600, 470)
+    f.title("Schalter: Rolle und OLED", "Ein Bitstream fuer beide Boards. sw2 und sw3 sind frei.")
+    hdr = ["sw1", "sw0", "Rolle", "Anzeige"]
+    xs = [60, 170, 300, 760]
     f.rect(40, 100, 1500, 44, BLUE, BLUE, 1, 8)
     for x, h in zip(xs, hdr):
         f.text(x, 108, h, 20, True, WHITE)
-    rows = [("0000", "kein Schalter -> Hinweis 'Waehle einen Schalter'", C_WARN),
-            ("0001", "Bosch-Logo (Anker steht)", C_REND),
-            ("0010", "Bosch-Logo, Anker rotiert", C_REND),
-            ("0100", "HHN-Logo", C_REND),
-            ("1000", "Pong, 1 gegen 1", C_REND),
-            ("0011", "mehrere Schalter -> Hinweis", C_WARN),
-            ("0101", "mehrere Schalter -> Hinweis", C_WARN),
-            ("1111", "alle oben -> Hinweis", C_WARN)]
-    for r, (bits, res, c) in enumerate(rows):
+    rows = [("00", "Server: rechnet das Spiel, linker Schlaeger", "OLED; LEDs spiegeln die Schalter", C_REND),
+            ("10", "Server (sw1 wird beim Server ignoriert)", "OLED; LEDs spiegeln die Schalter", C_REND),
+            ("01", "Client: rechter Schlaeger, zeigt das Spiel des Servers", "OLED; LEDs spiegeln die Schalter", C_SPI),
+            ("11", "Client ohne OLED: nur Tasten senden", "Display aus; LEDs = eigener Punktestand", C_WARN)]
+    for r, (bits, role, disp, c) in enumerate(rows):
         y = 150 + r * 52
         f.rect(40, y, 1500, 48, c, GREY, 1, 6)
         for x, b in zip(xs, bits):
             f.ellipse(x + 20, y + 24, 14, BLUE if b == "1" else WHITE, INK, 2)
             f.text(x + 46, y + 10, b, 20, True, mono=True)
-        f.text(xs[4], y + 10, res, 20)
-    f.text(40, 580, "VHDL (decode): when \"0001\" => M_BOSCH; \"0010\" => M_ROT; \"0100\" => M_HHN; \"1000\" => M_PONG; when others => M_MSG", 16, mono=True)
-    f.text(40, 610, "Blau gefuellt = Schalter oben (1).  Der Modus wird nur bei frame_tick uebernommen.", 16, color=GREY)
+        f.text(xs[2], y + 10, role, 19)
+        f.text(xs[3], y + 10, disp, 19)
+    f.text(40, 372, "Ohne Client spielt der Server wie frueher zu zweit an einem Board (btn2/btn3 = rechter Schlaeger).", 17)
+    f.text(40, 410, "Blau gefuellt = Schalter oben (1).  Die Rolle wird nur bei frame_tick uebernommen; ein Rollenwechsel startet ein neues Spiel.", 16, color=GREY)
     f.save("15_moduswahl.png")
 
 
@@ -761,7 +651,7 @@ def fig_frame_timing():
     f.arrow([(1485, 180), (1485, 260)], RED, 3)
     f.rect(1000, 265, 560, 190, C_REND, GREEN)
     f.text(1015, 275, "Bei frame_tick (1 Takt):", 17, True, GREEN)
-    f.text(1015, 305, "- mode  <- decode(sw)\n- ang   <- ang + 1  (alle 2 Bilder, nur sw1)\n- Pong: Schlaeger bewegen, Ball ein Schritt,\n         Punkte, Aufschlag-Zaehler", 16)
+    f.text(1015, 305, "- Rolle <- sw0 (Server / Client)\n- Server: Schlaeger bewegen, Ball ein Schritt,\n  Punkte, Aufschlag-Zaehler; danach Rahmen senden\n- Client: Zustand vom Server uebernehmen", 16)
     f.text(40, 270, "Ein Pixel im Detail:", 18, True, BLUE)
     x = 40
     for t, w, c in [("warten\n12 Takte\n(120 ns)", 200, C_HW), ("SPI-Byte hi\n= 140 Takte\n(1,4 us)", 330, C_SPI), ("SPI-Byte lo\n= 140 Takte\n(1,4 us)", 330, C_SPI)]:
@@ -910,7 +800,7 @@ def fig_entprellung():
 
 
 def fig_testbench():
-    f = Fig(1600, 560)
+    f = Fig(1600, 640)
     f.title("Simulation: tb_spi_top (GHDL)", "Ein Software-Modell des Displays liest die SPI-Signale mit und prueft den Inhalt Bit fuer Bit.")
     f.box(40, 160, 260, 120, "Stimulus\nsw, btn, ck_rst\n(Prozess in der Testbench)", C_IN, 17)
     f.box(370, 140, 340, 160, "DUT: spi_top\n(das echte Design)\nCLK_HZ = 1 MHz, SPI_HALF = 2\n(nur zum schnelleren Simulieren)", C_REND, 17, True)
@@ -919,17 +809,67 @@ def fig_testbench():
     f.arrow([(710, 220), (790, 220)])
     f.text(750, 150, "CS, SCK,\nMOSI, D/C", 13, color=GREY, ha="c")
     f.arrow([(960, 300), (960, 360)])
-    f.box(40, 360, 1500, 160, "Pruefungen (alle mit assert):\n1. Init: erstes Kommando 0xAE, 0xAF an Position 37, genau 44 Kommandos nach Bild 1, Kopf 15 00 5F 75 00 3F\n2. Bildinhalt aller 6144 Pixel stimmt mit der ROM-Palette ueberein (Hinweis, Bosch, HHN)\n3. Sprite-Fenster passt zu einem Drehwinkel; im Modus sw1 laeuft der Winkel hoch (>= 5)\n4. Pong: Schlaeger bei x=4/x=91, Ball in der Mitte; btn0 bewegt linken Schlaeger um 12 px, rechter bleibt\n5. Mehrere Schalter -> Hinweisbild", C_HW, 16)
+    f.box(1200, 140, 340, 160, "Test-Server in der Testbench\nspeist Ethernet-Rahmen ein\n\ntb_lan_pong: zwei spi_top\ntb_eth: eth_tx -> eth_rx", C_HW, 16)
+    f.box(40, 360, 1500, 240, "Pruefungen (alle mit assert):\n1. Init: erstes Kommando 0xAE, 0xAF an Position 37, genau 44 Kommandos nach Bild 1, Kopf 15 00 5F 75 00 3F\n2. Server: Pong-Grundstellung; btn0 bewegt den linken Schlaeger um 12 px, ohne Client btn2 den rechten;\n    jeder gesendete Rahmen hat die richtige Laenge und FCS, LD0 rot\n3. Client: zeigt den eingespeisten Spielzustand pixelgenau, sendet seine Tasten, LD0 gruen\n4. Client ohne OLED: Display-Pins 0, kein SPI-Takt, LEDs = Punktestand, Tasten werden weiter gesendet\n5. Zeitueberwachung: Server schweigt -> LD0 rot; Display startet wieder", C_HW, 16)
     f.save("21_testbench.png")
+
+
+def fig_lan():
+    f = Fig(1600, 850)
+    f.title("Pong ueber LAN: Server und Client",
+            "Zwei Arty A7, verbunden mit einem Netzwerkkabel (direkt oder ueber einen Switch). Ethernet-Rahmen an alle (Broadcast), ohne IP.")
+    for x, head, lines, col in [
+            (40, "Arty A7 #1:  SERVER  (sw0 = 0)",
+             "rechnet das Spiel (pong_game)\nbtn0 / btn1: linker Schlaeger\nohne Client: btn2 / btn3 rechts", BLUE),
+            (1040, "Arty A7 #2:  CLIENT  (sw0 = 1)",
+             "zeichnet den Zustand vom Server\nbtn0 / btn2: rechter Schlaeger hoch\nbtn1 / btn3: rechter Schlaeger runter\nsw1 = 1: kein OLED, LEDs = Punkte", PURPLE)]:
+        f.rect(x, 100, 520, 380, LGREY, col, 3, 14)
+        f.text(x + 260, 112, head, 20, True, col, "c")
+        f.rect(x + 20, 160, 96 * 2 + 12, 64 * 2 + 12, (50, 50, 55), INK, 2, 8)
+        f.paste(scaled(pong_frame(), 2), x + 26, 166)
+        f.text(x + 240, 165, lines, 16)
+        f.text(x + 20, 320, "LD0:  gruen = Partner verbunden\n         rot = kein Partner (seit ca. 0,3 s)", 16)
+        f.box(x + 20, 390, 480, 66, "lan_link -> eth_tx / eth_rx -> PHY (MII)", WHITE, 16, outline=col)
+    # Kabel
+    f.line([(560, 423), (1040, 423)], INK, 6)
+    f.text(800, 438, "RJ45-Patchkabel (Auto-MDIX) oder Switch", 15, color=GREY, ha="c")
+    f.arrow([(580, 200), (1020, 200)], BLUE, 3.5, 16)
+    f.text(800, 150, "Spielzustand (Typ 1) nach jedem Bild, ca. 55 x pro s", 16, True, BLUE, "c")
+    f.text(800, 210, "pl_y  pr_y  bx  by  score_l  score_r", 15, color=BLUE, ha="c", mono=True)
+    f.arrow([(1020, 320), (580, 320)], PURPLE, 3.5, 16)
+    f.text(800, 270, "Tasten (Typ 2) nach jedem Bild + bei jeder Aenderung", 16, True, PURPLE, "c")
+    f.text(800, 330, "Bit 0 = hoch, Bit 1 = runter", 15, color=PURPLE, ha="c", mono=True)
+    # Rahmen
+    f.text(40, 520, "Aufbau eines Rahmens (64 Byte + 8 Byte Praeambel = 5,8 us bei 100 Mbit/s)", 20, True, BLUE)
+    labels = ["Praeambel\n+ SFD", "Ziel\nFF..FF", "Quelle\n02:50:4F:4E:47:0R", "Typ\n88 B5", "\"PONG\"",
+              "Ver\n01", "Art", "Nr.", "Nutzdaten\n7 Byte", "Fuellbytes 00", "FCS\nCRC-32"]
+    widths = [130, 120, 210, 90, 100, 55, 55, 55, 150, 395, 140]
+    colors = [C_HW, C_IN, C_IN, C_IN, C_REND, C_REND, C_REND, C_REND, C_MEM, LGREY, C_CTRL]
+    bit_cells(f, 40, 565, labels, widths, colors, 80, 15)
+    x = 40
+    for lab, w in zip(["8", "0..5", "6..11", "12..13", "14..17", "18", "19", "20", "21..27", "28..59", "60..63"], widths):
+        f.text(x + w / 2, 652, lab, 14, color=GREY, ha="c")
+        x += w
+    f.text(40, 690, "Byte-Nummer (ab Ziel-Adresse).  R = 1 Server, 2 Client.  Art: 1 = Spielzustand, 2 = Tasten.", 15, color=GREY)
+    f.rect(40, 730, 1500, 92, C_WARN, ORANGE)
+    f.text(55, 742, "Angenommen wird ein Rahmen nur mit richtiger Laenge (64 Byte), richtiger CRC, EtherType 88B5, \"PONG\", Version 1 und\n"
+           "der passenden Art. Zeitueberwachung: kommt 15 Bilder lang (ca. 0,3 s) kein gueltiger Rahmen, gilt der Partner als getrennt:\n"
+           "der Server spielt wieder lokal (btn2 / btn3), der Client zeigt die Grundstellung mit blinkendem Ball, LD0 wird rot.", 16)
+    f.save("22_lan_pong.png")
 
 
 def main():
     for fn in (fig_grundlagen, fig_toolflow, fig_anschluss, fig_gesamt, fig_spi_timing, fig_spi_fsm, fig_ctrl_fsm,
-               fig_power, fig_bildaufbau, fig_rgb565, fig_pipeline, fig_rom, fig_sprites, fig_vorschau, fig_modus,
-               fig_frame_timing, fig_pong_feld, fig_pong_ablauf, fig_ablenkung, fig_entprellung, fig_testbench):
+               fig_power, fig_bildaufbau, fig_rgb565, fig_modus,
+               fig_frame_timing, fig_pong_feld, fig_pong_ablauf, fig_ablenkung, fig_entprellung, fig_testbench, fig_lan):
         fn()
         print("ok", fn.__name__)
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:                   # nur einzelne Bilder, z. B. fig_lan fig_modus
+        for name in sys.argv[1:]:
+            globals()[name]()
+            print("ok", name)
+    else:
+        main()
